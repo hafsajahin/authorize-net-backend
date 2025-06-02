@@ -16,11 +16,9 @@ app.get('/', (req, res) => {
 
 // ✅ Create payment token
 app.post('/create-payment-token', async (req, res) => {
-  ctrl.setEnvironment('https://apitest.authorize.net/xml/v1/request.api'); // ✅ Sandbox endpoint
-   const { apiLoginId, transactionKey, amount, transactionId } = req.body;
-  
+  const { apiLoginId, transactionKey, amount, transactionId } = req.body;
 
-  // Validation (optional but recommended)
+  // Validation
   if (!apiLoginId || !transactionKey || !amount || !transactionId) {
     return res.status(400).json({ message: 'Missing required fields' });
   }
@@ -39,6 +37,9 @@ app.post('/create-payment-token', async (req, res) => {
 
   const ctrl = new APIControllers.CreateTransactionController(createRequest.getJSON());
 
+  // ✅ SET SANDBOX ENVIRONMENT (after controller is created)
+  ctrl.setEnvironment('https://apitest.authorize.net/xml/v1/request.api');
+
   ctrl.execute(() => {
     const apiResponse = ctrl.getResponse();
     const response = new APIContracts.CreateTransactionResponse(apiResponse);
@@ -55,7 +56,6 @@ app.post('/create-payment-token', async (req, res) => {
       try {
         errorMessage = response.getMessages().getMessage()[0].getText();
       } catch (e) {
-        // If response is malformed
         errorMessage = 'Unknown error during transaction';
       }
       res.status(500).json({ message: errorMessage });
