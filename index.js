@@ -11,14 +11,17 @@ app.use(bodyParser.json());
 
 // ✅ Test route
 app.get('/', (req, res) => {
-  res.send('Authorize.Net backend is running');
+  res.send('Authorize.Net LIVE backend is running');
 });
 
-// ✅ Create payment token
+// ✅ Create payment token (Live Mode)
 app.post('/create-payment-token', async (req, res) => {
-  const { apiLoginId, transactionKey, amount, transactionId } = req.body;
+  const { amount, transactionId } = req.body;
 
-  // Validate required fields
+  const apiLoginId = process.env.API_LOGIN_ID;
+  const transactionKey = process.env.TRANSACTION_KEY;
+
+  // Validation
   if (!apiLoginId || !transactionKey || !amount || !transactionId) {
     return res.status(400).json({ message: 'Missing required fields' });
   }
@@ -27,17 +30,18 @@ app.post('/create-payment-token', async (req, res) => {
   merchantAuthentication.setName(apiLoginId);
   merchantAuthentication.setTransactionKey(transactionKey);
 
+  const transactionRequestType = new APIContracts.TransactionRequestType();
+  transactionRequestType.setTransactionType(APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
+  transactionRequestType.setAmount(parseFloat(amount));
+
+  // 🔐 LIVE MODE expects real card data (this sample uses hardcoded card for test)
   const creditCard = new APIContracts.CreditCardType();
-  creditCard.setCardNumber('4111111111111111'); // Test card
+  creditCard.setCardNumber('4111111111111111'); // ⚠️ Replace with real card data in production
   creditCard.setExpirationDate('2038-12');
   creditCard.setCardCode('123');
 
   const paymentType = new APIContracts.PaymentType();
   paymentType.setCreditCard(creditCard);
-
-  const transactionRequestType = new APIContracts.TransactionRequestType();
-  transactionRequestType.setTransactionType(APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
-  transactionRequestType.setAmount(parseFloat(amount));
   transactionRequestType.setPayment(paymentType);
 
   const createRequest = new APIContracts.CreateTransactionRequest();
@@ -46,6 +50,7 @@ app.post('/create-payment-token', async (req, res) => {
 
   const ctrl = new APIControllers.CreateTransactionController(createRequest.getJSON());
 
+  // ✅ DO NOT set sandbox endpoint (it defaults to LIVE)
   ctrl.execute(() => {
     const apiResponse = ctrl.getResponse();
     const response = new APIContracts.CreateTransactionResponse(apiResponse);
@@ -56,7 +61,7 @@ app.post('/create-payment-token', async (req, res) => {
       response.getTransactionResponse().getTransId()
     ) {
       const token = response.getTransactionResponse().getTransId();
-      res.json({ token }); // ✅ Success
+      res.json({ token });
     } else {
       let errorMessage = 'Transaction failed';
       try {
@@ -69,7 +74,7 @@ app.post('/create-payment-token', async (req, res) => {
   });
 });
 
-// ✅ Start the server
+// ✅ Start server
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`LIVE backend running on port ${PORT}`);
 });
