@@ -9,19 +9,13 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(bodyParser.json());
 
-// ✅ Test route
 app.get('/', (req, res) => {
-  res.send('Authorize.Net LIVE backend is running');
+  res.send('Authorize.Net Accept Hosted backend is running');
 });
 
-// ✅ Create payment token (Live Mode)
 app.post('/create-payment-token', async (req, res) => {
-  const { amount, transactionId } = req.body;
+  const { apiLoginId, transactionKey, amount, transactionId } = req.body;
 
-  const apiLoginId = process.env.API_LOGIN_ID;
-  const transactionKey = process.env.TRANSACTION_KEY;
-
-  // Validation
   if (!apiLoginId || !transactionKey || !amount || !transactionId) {
     return res.status(400).json({ message: 'Missing required fields' });
   }
@@ -31,50 +25,41 @@ app.post('/create-payment-token', async (req, res) => {
   merchantAuthentication.setTransactionKey(transactionKey);
 
   const transactionRequestType = new APIContracts.TransactionRequestType();
-  transactionRequestType.setTransactionType(APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
+  transactionRequestType.setTransactionType('authCaptureTransaction');
   transactionRequestType.setAmount(parseFloat(amount));
 
-  // 🔐 LIVE MODE expects real card data (this sample uses hardcoded card for test)
-  const creditCard = new APIContracts.CreditCardType();
-  creditCard.setCardNumber('4111111111111111'); // ⚠️ Replace with real card data in production
-  creditCard.setExpirationDate('2038-12');
-  creditCard.setCardCode('123');
+  const setting1 = new APIContracts.SettingType();
+  setting1.setSettingName('hostedPaymentReturnOptions');
+  setting1.setSettingValue(JSON.stringify({
+    showReceipt: false,
+    url: 'https://www.yourwixsite.com/payment-success',
+    urlText: 'Continue',
+    cancelUrl: 'https://www.yourwixsite.com/payment-cancel',
+    cancelUrlText: 'Cancel',
+  }));
 
-  const paymentType = new APIContracts.PaymentType();
-  paymentType.setCreditCard(creditCard);
-  transactionRequestType.setPayment(paymentType);
+  const settingList = [setting1];
 
-  const createRequest = new APIContracts.CreateTransactionRequest();
-  createRequest.setMerchantAuthentication(merchantAuthentication);
-  createRequest.setTransactionRequest(transactionRequestType);
+  const request = new APIContracts.GetHostedPaymentPageRequest();
+  request.setMerchantAuthentication(merchantAuthentication);
+  request.setTransactionRequest(transactionRequestType);
+  request.setHostedPaymentSettings({ setting: settingList });
 
-  const ctrl = new APIControllers.CreateTransactionController(createRequest.getJSON());
+  const ctrl = new APIControllers.GetHostedPaymentPageController(request.getJSON());
 
-  // ✅ DO NOT set sandbox endpoint (it defaults to LIVE)
   ctrl.execute(() => {
     const apiResponse = ctrl.getResponse();
-    const response = new APIContracts.CreateTransactionResponse(apiResponse);
+    const response = new APIContracts.GetHostedPaymentPageResponse(apiResponse);
 
-    if (
-      response &&
-      response.getMessages().getResultCode() === 'Ok' &&
-      response.getTransactionResponse().getTransId()
-    ) {
-      const token = response.getTransactionResponse().getTransId();
+    if (response.getMessages().getResultCode() === 'Ok') {
+      const token = response.getToken();
       res.json({ token });
     } else {
-      let errorMessage = 'Transaction failed';
-      try {
-        errorMessage = response.getMessages().getMessage()[0].getText();
-      } catch (e) {
-        errorMessage = 'Unknown error during transaction';
-      }
-      res.status(500).json({ message: errorMessage });
+      res.status(500).json({ message: response.getMessages().getMessage()[0].getText() });
     }
   });
 });
 
-// ✅ Start server
 app.listen(PORT, () => {
-  console.log(`LIVE backend running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
