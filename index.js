@@ -16,7 +16,9 @@ app.get('/', (req, res) => {
 
 // ✅ Create payment token
 app.post('/create-payment-token', async (req, res) => {
-  const { apiLoginId, transactionKey, amount, transactionId } = req.body;
+  ctrl.setEnvironment('https://apitest.authorize.net/xml/v1/request.api'); // ✅ Sandbox endpoint
+   const { apiLoginId, transactionKey, amount, transactionId } = req.body;
+  
 
   // Validation (optional but recommended)
   if (!apiLoginId || !transactionKey || !amount || !transactionId) {
