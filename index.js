@@ -18,7 +18,7 @@ app.get('/', (req, res) => {
 app.post('/create-payment-token', async (req, res) => {
   const { apiLoginId, transactionKey, amount, transactionId } = req.body;
 
-  // Validation
+  // Validate required fields
   if (!apiLoginId || !transactionKey || !amount || !transactionId) {
     return res.status(400).json({ message: 'Missing required fields' });
   }
@@ -27,30 +27,24 @@ app.post('/create-payment-token', async (req, res) => {
   merchantAuthentication.setName(apiLoginId);
   merchantAuthentication.setTransactionKey(transactionKey);
 
-const transactionRequestType = new APIContracts.TransactionRequestType();
-transactionRequestType.setTransactionType(APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
-transactionRequestType.setAmount(parseFloat(amount));
+  const creditCard = new APIContracts.CreditCardType();
+  creditCard.setCardNumber('4111111111111111'); // Test card
+  creditCard.setExpirationDate('2038-12');
+  creditCard.setCardCode('123');
 
-// 🔐 Add test card
-const creditCard = new APIContracts.CreditCardType();
-creditCard.setCardNumber('4111111111111111');
-creditCard.setExpirationDate('2038-12');
-creditCard.setCardCode('123');
+  const paymentType = new APIContracts.PaymentType();
+  paymentType.setCreditCard(creditCard);
 
-const paymentType = new APIContracts.PaymentType();
-paymentType.setCreditCard(creditCard);
-
-transactionRequestType.setPayment(paymentType);
-
+  const transactionRequestType = new APIContracts.TransactionRequestType();
+  transactionRequestType.setTransactionType(APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
+  transactionRequestType.setAmount(parseFloat(amount));
+  transactionRequestType.setPayment(paymentType);
 
   const createRequest = new APIContracts.CreateTransactionRequest();
   createRequest.setMerchantAuthentication(merchantAuthentication);
   createRequest.setTransactionRequest(transactionRequestType);
 
   const ctrl = new APIControllers.CreateTransactionController(createRequest.getJSON());
-
-  // ✅ SET SANDBOX ENVIRONMENT (after controller is created)
-  ctrl.setEnvironment('https://apitest.authorize.net/xml/v1/request.api');
 
   ctrl.execute(() => {
     const apiResponse = ctrl.getResponse();
@@ -62,7 +56,7 @@ transactionRequestType.setPayment(paymentType);
       response.getTransactionResponse().getTransId()
     ) {
       const token = response.getTransactionResponse().getTransId();
-      res.json({ token }); // ✅ Return the token to frontend
+      res.json({ token }); // ✅ Success
     } else {
       let errorMessage = 'Transaction failed';
       try {
@@ -75,7 +69,7 @@ transactionRequestType.setPayment(paymentType);
   });
 });
 
-// ✅ Start server
+// ✅ Start the server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
