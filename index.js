@@ -9,14 +9,22 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(bodyParser.json());
 
-// ✅ Main route to verify server is working
+// ✅ Health check route
 app.get('/', (req, res) => {
   res.send('Authorize.Net backend is running');
 });
 
-// ✅ Real /create-payment-token implementation
+// ✅ Secure payment token generation
 app.post('/create-payment-token', async (req, res) => {
-  const { apiLoginId, transactionKey, amount, transactionId } = req.body;
+  const { amount, transactionId } = req.body;
+
+  // Use secure credentials from environment variables
+  const apiLoginId = process.env.API_LOGIN_ID;
+  const transactionKey = process.env.TRANSACTION_KEY;
+
+  if (!apiLoginId || !transactionKey) {
+    return res.status(500).json({ message: 'API credentials are missing in environment variables' });
+  }
 
   const merchantAuthentication = new APIContracts.MerchantAuthenticationType();
   merchantAuthentication.setName(apiLoginId);
@@ -42,15 +50,13 @@ app.post('/create-payment-token', async (req, res) => {
       response.getTransactionResponse().getTransId()
     ) {
       const token = response.getTransactionResponse().getTransId();
-      res.json({ token }); // ✅ Returning real token
+      res.json({ token });
     } else {
-      const error = response.getMessages().getMessage()[0];
-      res.status(500).json({ message: error.getText() });
+      const error = response.getMessages()?.getMessage?.()[0];
+      res.status(500).json({ message: error?.getText() || 'Transaction failed' });
     }
   });
 });
 
-// ✅ Start the server
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+// ✅ Start server
+app.listen(PORT, ()
