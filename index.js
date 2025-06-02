@@ -27,9 +27,21 @@ app.post('/create-payment-token', async (req, res) => {
   merchantAuthentication.setName(apiLoginId);
   merchantAuthentication.setTransactionKey(transactionKey);
 
-  const transactionRequestType = new APIContracts.TransactionRequestType();
-  transactionRequestType.setTransactionType(APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
-  transactionRequestType.setAmount(parseFloat(amount));
+const transactionRequestType = new APIContracts.TransactionRequestType();
+transactionRequestType.setTransactionType(APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
+transactionRequestType.setAmount(parseFloat(amount));
+
+// 🔐 Add test card
+const creditCard = new APIContracts.CreditCardType();
+creditCard.setCardNumber('4111111111111111');
+creditCard.setExpirationDate('2038-12');
+creditCard.setCardCode('123');
+
+const paymentType = new APIContracts.PaymentType();
+paymentType.setCreditCard(creditCard);
+
+transactionRequestType.setPayment(paymentType);
+
 
   const createRequest = new APIContracts.CreateTransactionRequest();
   createRequest.setMerchantAuthentication(merchantAuthentication);
