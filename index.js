@@ -9,21 +9,18 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(bodyParser.json());
 
-// ✅ Health check route
+// ✅ Test route
 app.get('/', (req, res) => {
   res.send('Authorize.Net backend is running');
 });
 
-// ✅ Secure payment token generation
+// ✅ Create payment token
 app.post('/create-payment-token', async (req, res) => {
-  const { amount, transactionId } = req.body;
+  const { apiLoginId, transactionKey, amount, transactionId } = req.body;
 
-  // Use secure credentials from environment variables
-  const apiLoginId = process.env.API_LOGIN_ID;
-  const transactionKey = process.env.TRANSACTION_KEY;
-
-  if (!apiLoginId || !transactionKey) {
-    return res.status(500).json({ message: 'API credentials are missing in environment variables' });
+  // Validation (optional but recommended)
+  if (!apiLoginId || !transactionKey || !amount || !transactionId) {
+    return res.status(400).json({ message: 'Missing required fields' });
   }
 
   const merchantAuthentication = new APIContracts.MerchantAuthenticationType();
@@ -31,8 +28,8 @@ app.post('/create-payment-token', async (req, res) => {
   merchantAuthentication.setTransactionKey(transactionKey);
 
   const transactionRequestType = new APIContracts.TransactionRequestType();
-  transactionRequestType.setTransactionType('authCaptureTransaction');
-  transactionRequestType.setAmount(amount);
+  transactionRequestType.setTransactionType(APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
+  transactionRequestType.setAmount(parseFloat(amount));
 
   const createRequest = new APIContracts.CreateTransactionRequest();
   createRequest.setMerchantAuthentication(merchantAuthentication);
@@ -50,13 +47,21 @@ app.post('/create-payment-token', async (req, res) => {
       response.getTransactionResponse().getTransId()
     ) {
       const token = response.getTransactionResponse().getTransId();
-      res.json({ token });
+      res.json({ token }); // ✅ Return the token to frontend
     } else {
-      const error = response.getMessages()?.getMessage?.()[0];
-      res.status(500).json({ message: error?.getText() || 'Transaction failed' });
+      let errorMessage = 'Transaction failed';
+      try {
+        errorMessage = response.getMessages().getMessage()[0].getText();
+      } catch (e) {
+        // If response is malformed
+        errorMessage = 'Unknown error during transaction';
+      }
+      res.status(500).json({ message: errorMessage });
     }
   });
 });
 
 // ✅ Start server
-app.listen(PORT, ()
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
