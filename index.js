@@ -49,9 +49,9 @@ app.post('/create-payment-token', async (req, res) => {
     setting1.setSettingName('hostedPaymentReturnOptions');
     setting1.setSettingValue(JSON.stringify({
       showReceipt: false,
-      url: 'https://www.yourwixsite.com/payment-success',
+      url: 'https://www.luxury-lounger.com/payment-success',
       urlText: 'Continue',
-      cancelUrl: 'https://www.yourwixsite.com/payment-cancel',
+      cancelUrl: 'https://www.luxury-lounger.com/payment-cancel',
       cancelUrlText: 'Cancel',
     }));
 
