@@ -1,55 +1,61 @@
-const express = require('express');
-const cors = require('cors');
-const bodyParser = require('body-parser');
-const { APIContracts, APIControllers } = require('authorizenet');
+const express = require("express");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const { APIContracts, APIControllers } = require("authorizenet");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
 app.use(cors());
 app.use(bodyParser.json());
 
-app.get('/', (req, res) => {
-  res.send('Authorize.Net Accept Hosted backend is running');
-});
+const API_LOGIN_ID = process.env.API_LOGIN_ID;
+const TRANSACTION_KEY = process.env.TRANSACTION_KEY;
 
-app.post('/create-payment-token', async (req, res) => {
-  const { apiLoginId, transactionKey, amount, transactionId } = req.body;
-
-  if (!apiLoginId || !transactionKey || !amount || !transactionId) {
-    return res.status(400).json({ message: 'Missing required fields' });
-  }
-
-  // ✅ Log masked credentials
-  console.log('🔐 Received credentials:', {
-    apiLoginId: apiLoginId?.slice(0, 5),
-    transactionKeyLength: transactionKey?.length,
+app.post("/create-payment-token", async (req, res) => {
+  const {
     amount,
-    transactionId
-  });
+    orderNumber,
+    customerEmail,
+    billing
+  } = req.body;
 
   const merchantAuthentication = new APIContracts.MerchantAuthenticationType();
-  merchantAuthentication.setName(apiLoginId);
-  merchantAuthentication.setTransactionKey(transactionKey);
+  merchantAuthentication.setName(API_LOGIN_ID);
+  merchantAuthentication.setTransactionKey(TRANSACTION_KEY);
 
   const transactionRequestType = new APIContracts.TransactionRequestType();
-  transactionRequestType.setTransactionType('authCaptureTransaction');
-  transactionRequestType.setAmount(parseFloat(amount));
+  transactionRequestType.setTransactionType(APIContracts.TransactionTypeEnum.AUTHONLYTRANSACTION);
+  transactionRequestType.setAmount(amount);
 
-  const setting1 = new APIContracts.SettingType();
-  setting1.setSettingName('hostedPaymentReturnOptions');
-  setting1.setSettingValue(JSON.stringify({
-    showReceipt: false,
-    url: 'https://www.luxury-lounger.com/payment-success',
-    urlText: 'Continue',
-    cancelUrl: 'https://www.luxury-lounger.com/payment-cancel',
-    cancelUrlText: 'Cancel',
-  }));
+  const customerAddress = new APIContracts.CustomerAddressType();
+  customerAddress.setFirstName(billing.firstName);
+  customerAddress.setLastName(billing.lastName);
+  customerAddress.setAddress(billing.address);
+  customerAddress.setCity(billing.city);
+  customerAddress.setState(billing.state);
+  customerAddress.setZip(billing.zip);
+  customerAddress.setCountry(billing.country);
+
+  const order = new APIContracts.OrderType();
+  order.setInvoiceNumber(orderNumber);
+  order.setDescription("Order from Wix");
 
   const request = new APIContracts.GetHostedPaymentPageRequest();
   request.setMerchantAuthentication(merchantAuthentication);
   request.setTransactionRequest(transactionRequestType);
-  request.setHostedPaymentSettings({ setting: [setting1] });
+  request.setHostedPaymentSettings({
+    setting: [
+      {
+        settingName: "hostedPaymentReturnOptions",
+        settingValue: JSON.stringify({
+          showReceipt: false,
+          url: "https://www.your-wix-site.com/payment-success",
+          urlText: "Continue",
+          cancelUrl: "https://www.your-wix-site.com/payment-failed",
+          cancelUrlText: "Cancel"
+        })
+      }
+    ]
+  });
 
   const ctrl = new APIControllers.GetHostedPaymentPageController(request.getJSON());
 
@@ -57,24 +63,23 @@ app.post('/create-payment-token', async (req, res) => {
     const apiResponse = ctrl.getResponse();
     const response = new APIContracts.GetHostedPaymentPageResponse(apiResponse);
 
-    if (response.getMessages().getResultCode() === 'Ok') {
+    if (response.getMessages().getResultCode() === APIContracts.MessageTypeEnum.OK) {
       const token = response.getToken();
-      const encodedToken = encodeURIComponent(token);
-      const redirectUrl = `https://test.authorize.net/payment/payment?token=${encodedToken}`;
-
-      console.log('✅ Generated token:', token);
-      console.log('🔗 Redirect URL:', redirectUrl);
-
-      // ✅ Send both raw token and redirect link
-      res.json({ token, redirectUrl });
+      const url = `https://accept.authorize.net/payment/payment/${token}`;
+      return res.json({ url });
     } else {
-      const error = response.getMessages().getMessage()[0].getText();
-      console.error('❌ Error:', error);
-      res.status(500).json({ message: error });
+      return res.status(500).json({
+        error: response.getMessages().getMessage()[0].getText()
+      });
     }
   });
 });
 
+app.get("/", (req, res) => {
+  res.send("Authorize.Net backend is running.");
+});
+
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`Server listening on port ${PORT}`);
 });
