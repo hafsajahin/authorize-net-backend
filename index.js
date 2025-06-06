@@ -88,8 +88,7 @@ app.post("/create-payment-token", async (req, res) => {
 
       if (response.getMessages().getResultCode() === APIContracts.MessageTypeEnum.OK) {
         const token = response.getToken();
-        const encodedToken = encodeURIComponent(token);
-        const redirectUrl = `https://accept.authorize.net/payment/payment/${encodedToken}`;
+        const redirectUrl = `https://accept.authorize.net/payment/payment/${token}`; // ✅ Do NOT encode token
         res.status(200).json({ url: redirectUrl });
       } else {
         const error = response.getMessages().getMessage()[0];
