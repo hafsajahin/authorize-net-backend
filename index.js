@@ -1,85 +1,96 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const cors = require("cors");
 const { APIContracts, APIControllers } = require("authorizenet");
+const cors = require("cors");
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-const API_LOGIN_ID = process.env.API_LOGIN_ID;
-const TRANSACTION_KEY = process.env.TRANSACTION_KEY;
-
 app.post("/create-payment-token", async (req, res) => {
-  const {
-    amount,
-    orderNumber,
-    customerEmail,
-    billing
-  } = req.body;
+  try {
+    const {
+      apiLoginId,
+      transactionKey,
+      amount,
+      orderNumber,
+      customerEmail,
+      billing,
+    } = req.body;
 
-  const merchantAuthentication = new APIContracts.MerchantAuthenticationType();
-  merchantAuthentication.setName(API_LOGIN_ID);
-  merchantAuthentication.setTransactionKey(TRANSACTION_KEY);
+    // Create merchant authentication
+    const merchantAuthentication = new APIContracts.MerchantAuthenticationType();
+    merchantAuthentication.setName(apiLoginId);
+    merchantAuthentication.setTransactionKey(transactionKey);
 
-  const transactionRequestType = new APIContracts.TransactionRequestType();
-  transactionRequestType.setTransactionType(APIContracts.TransactionTypeEnum.AUTHONLYTRANSACTION);
-  transactionRequestType.setAmount(amount);
+    // Create transaction request
+    const transactionRequestType = new APIContracts.TransactionRequestType();
+    transactionRequestType.setTransactionType(APIContracts.TransactionTypeEnum.AUTHONLYTRANSACTION);
+    transactionRequestType.setAmount(amount);
 
-  const customerAddress = new APIContracts.CustomerAddressType();
-  customerAddress.setFirstName(billing.firstName);
-  customerAddress.setLastName(billing.lastName);
-  customerAddress.setAddress(billing.address);
-  customerAddress.setCity(billing.city);
-  customerAddress.setState(billing.state);
-  customerAddress.setZip(billing.zip);
-  customerAddress.setCountry(billing.country);
+    // Billing info
+    const billTo = new APIContracts.CustomerAddressType();
+    billTo.setFirstName(billing.firstName);
+    billTo.setLastName(billing.lastName);
+    billTo.setAddress(billing.address);
+    billTo.setCity(billing.city);
+    billTo.setState(billing.state);
+    billTo.setZip(billing.zip);
+    billTo.setCountry(billing.country);
+    billTo.setPhoneNumber(billing.phone);
+    billTo.setEmail(customerEmail);
+    transactionRequestType.setBillTo(billTo);
 
-  const order = new APIContracts.OrderType();
-  order.setInvoiceNumber(orderNumber);
-  order.setDescription("Order from Wix");
+    // Hosted payment settings
+    const setting1 = new APIContracts.SettingType();
+    setting1.setSettingName("hostedPaymentReturnOptions");
+    setting1.setSettingValue(JSON.stringify({
+      showReceipt: false,
+      url: "https://www.example.com/payment-success",
+      urlText: "Continue",
+      cancelUrl: "https://www.example.com/payment-cancel",
+      cancelUrlText: "Cancel"
+    }));
 
-  const request = new APIContracts.GetHostedPaymentPageRequest();
-  request.setMerchantAuthentication(merchantAuthentication);
-  request.setTransactionRequest(transactionRequestType);
-  request.setHostedPaymentSettings({
-    setting: [
-      {
-        settingName: "hostedPaymentReturnOptions",
-        settingValue: JSON.stringify({
-          showReceipt: false,
-          url: "https://www.your-wix-site.com/payment-success",
-          urlText: "Continue",
-          cancelUrl: "https://www.your-wix-site.com/payment-failed",
-          cancelUrlText: "Cancel"
-        })
+    const setting2 = new APIContracts.SettingType();
+    setting2.setSettingName("hostedPaymentButtonOptions");
+    setting2.setSettingValue(JSON.stringify({ text: "Pay Now" }));
+
+    const settingList = [];
+    settingList.push(setting1);
+    settingList.push(setting2);
+
+    const settings = new APIContracts.ArrayOfSetting();
+    settings.setSetting(settingList);
+
+    // Request for token
+    const request = new APIContracts.GetHostedPaymentPageRequest();
+    request.setMerchantAuthentication(merchantAuthentication);
+    request.setTransactionRequest(transactionRequestType);
+    request.setHostedPaymentSettings(settings);
+
+    const ctrl = new APIControllers.GetHostedPaymentPageController(request.getJSON());
+    ctrl.execute(() => {
+      const apiResponse = ctrl.getResponse();
+      const response = new APIContracts.GetHostedPaymentPageResponse(apiResponse);
+
+      if (response !== null && response.getMessages().getResultCode() === APIContracts.MessageTypeEnum.OK) {
+        const token = response.getToken();
+        const url = `https://accept.authorize.net/payment/payment/${token}`;
+        res.json({ url });
+      } else {
+        const errorMessages = response.getMessages().getMessage();
+        res.status(500).json({
+          error: errorMessages[0].getText(),
+        });
       }
-    ]
-  });
-
-  const ctrl = new APIControllers.GetHostedPaymentPageController(request.getJSON());
-
-  ctrl.execute(() => {
-    const apiResponse = ctrl.getResponse();
-    const response = new APIContracts.GetHostedPaymentPageResponse(apiResponse);
-
-    if (response.getMessages().getResultCode() === APIContracts.MessageTypeEnum.OK) {
-      const token = response.getToken();
-      const url = `https://accept.authorize.net/payment/payment/${token}`;
-      return res.json({ url });
-    } else {
-      return res.status(500).json({
-        error: response.getMessages().getMessage()[0].getText()
-      });
-    }
-  });
-});
-
-app.get("/", (req, res) => {
-  res.send("Authorize.Net backend is running.");
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`Authorize.net backend is running on port ${PORT}`);
 });
