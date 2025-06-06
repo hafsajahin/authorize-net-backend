@@ -12,47 +12,62 @@ app.use(bodyParser.json());
 
 /**
  * POST /create-payment-token
- * Body must include:
+ * Required JSON body:
  * {
  *   apiLoginId: "yourApiLoginId",
  *   transactionKey: "yourTransactionKey",
- *   amount: "10.00"
+ *   amount: "10.00",
+ *   orderNumber: "WIX-12345",
+ *   customerEmail: "customer@example.com",
+ *   billing: {
+ *     firstName: "", lastName: "", address: "",
+ *     city: "", state: "", zip: "", country: "", phone: ""
+ *   }
  * }
  */
 app.post("/create-payment-token", async (req, res) => {
-  const { apiLoginId, transactionKey, amount } = req.body;
+  const { apiLoginId, transactionKey, amount, orderNumber, customerEmail, billing } = req.body;
 
   if (!apiLoginId || !transactionKey || !amount) {
-    return res.status(400).json({
-      error: "Missing required fields: apiLoginId, transactionKey, or amount",
-    });
+    return res.status(400).json({ error: "Missing required fields" });
   }
 
   try {
-    // Merchant Auth
     const merchantAuthentication = new APIContracts.MerchantAuthenticationType();
     merchantAuthentication.setName(apiLoginId);
     merchantAuthentication.setTransactionKey(transactionKey);
 
-    // Transaction setup
     const transactionRequest = new APIContracts.TransactionRequestType();
-    transactionRequest.setTransactionType(
-      APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION
-    );
+    transactionRequest.setTransactionType(APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
     transactionRequest.setAmount(amount);
 
-    // Hosted Payment Settings
+    if (orderNumber) transactionRequest.setOrder({ invoiceNumber: orderNumber });
+
+    if (customerEmail) transactionRequest.setCustomer({ email: customerEmail });
+
+    if (billing) {
+      const billTo = new APIContracts.CustomerAddressType();
+      billTo.setFirstName(billing.firstName);
+      billTo.setLastName(billing.lastName);
+      billTo.setAddress(billing.address);
+      billTo.setCity(billing.city);
+      billTo.setState(billing.state);
+      billTo.setZip(billing.zip);
+      billTo.setCountry(billing.country);
+      billTo.setPhoneNumber(billing.phone);
+      transactionRequest.setBillTo(billTo);
+    }
+
+    // Hosted Payment Page Settings
     const returnOptions = new APIContracts.SettingType();
     returnOptions.setSettingName("hostedPaymentReturnOptions");
-    returnOptions.setSettingValue(
-      JSON.stringify({
-        showReceipt: false,
-        url: "https://www.luxury-lounger.com/success",     // ✅ Update to your actual success page
-        urlText: "Continue",
-        cancelUrl: "https://www.luxury-lounger.com/cancel", // ✅ Update to your actual cancel page
-        cancelUrlText: "Cancel",
-      })
-    );
+    returnOptions.setSettingValue(JSON.stringify({
+      showReceipt: false,
+      url: "https://www.luxury-lounger.com/success",   // ✅ LIVE Success URL
+      urlText: "Continue",
+      cancelUrl: "https://www.luxury-lounger.com/cancel", // ✅ LIVE Cancel URL
+      cancelUrlText: "Cancel"
+    }));
 
     const buttonOptions = new APIContracts.SettingType();
     buttonOptions.setSettingName("hostedPaymentButtonOptions");
@@ -72,19 +87,17 @@ app.post("/create-payment-token", async (req, res) => {
       const response = new APIContracts.GetHostedPaymentPageResponse(apiResponse);
 
       if (response.getMessages().getResultCode() === APIContracts.MessageTypeEnum.OK) {
-        const token = response.getToken()?.trim(); // ✅ Make sure it's trimmed
-        if (!token) {
-          return res.status(500).json({ error: "Empty token received" });
-        }
-        const redirectUrl = `https://accept.authorize.net/payment/payment/${token}`; // ✅ Do NOT encode
+        const token = response.getToken();
+        const encodedToken = encodeURIComponent(token);
+        const redirectUrl = `https://accept.authorize.net/payment/payment/${encodedToken}`;
         res.status(200).json({ url: redirectUrl });
       } else {
         const error = response.getMessages().getMessage()[0];
-        res.status(500).json({
-          error: `${error.getCode()}: ${error.getText()}`,
-        });
+        console.error("Authorize.Net Error:", error.getCode(), error.getText());
+        res.status(500).json({ error: `${error.getCode()}: ${error.getText()}` });
       }
     });
+
   } catch (err) {
     console.error("Token generation failed:", err);
     res.status(500).json({ error: "Internal server error during token generation" });
