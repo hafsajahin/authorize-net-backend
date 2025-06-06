@@ -12,7 +12,7 @@ app.use(bodyParser.json());
 
 /**
  * POST /create-payment-token
- * Required body:
+ * Body must include:
  * {
  *   apiLoginId: "yourApiLoginId",
  *   transactionKey: "yourTransactionKey",
@@ -23,7 +23,9 @@ app.post("/create-payment-token", async (req, res) => {
   const { apiLoginId, transactionKey, amount } = req.body;
 
   if (!apiLoginId || !transactionKey || !amount) {
-    return res.status(400).json({ error: "Missing required fields: apiLoginId, transactionKey, or amount" });
+    return res.status(400).json({
+      error: "Missing required fields: apiLoginId, transactionKey, or amount",
+    });
   }
 
   try {
@@ -34,19 +36,23 @@ app.post("/create-payment-token", async (req, res) => {
 
     // Transaction setup
     const transactionRequest = new APIContracts.TransactionRequestType();
-    transactionRequest.setTransactionType(APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
+    transactionRequest.setTransactionType(
+      APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION
+    );
     transactionRequest.setAmount(amount);
 
     // Hosted Payment Settings
     const returnOptions = new APIContracts.SettingType();
     returnOptions.setSettingName("hostedPaymentReturnOptions");
-    returnOptions.setSettingValue(JSON.stringify({
-      showReceipt: false,
-      url: "https://your-wix-site.com/success",     // 🔁 Replace with your live success URL
-      urlText: "Continue",
-      cancelUrl: "https://your-wix-site.com/cancel", // 🔁 Replace with your cancel URL
-      cancelUrlText: "Cancel"
-    }));
+    returnOptions.setSettingValue(
+      JSON.stringify({
+        showReceipt: false,
+        url: "https://www.luxury-lounger.com/success",     // ✅ Update to your actual success page
+        urlText: "Continue",
+        cancelUrl: "https://www.luxury-lounger.com/cancel", // ✅ Update to your actual cancel page
+        cancelUrlText: "Cancel",
+      })
+    );
 
     const buttonOptions = new APIContracts.SettingType();
     buttonOptions.setSettingName("hostedPaymentButtonOptions");
@@ -66,13 +72,17 @@ app.post("/create-payment-token", async (req, res) => {
       const response = new APIContracts.GetHostedPaymentPageResponse(apiResponse);
 
       if (response.getMessages().getResultCode() === APIContracts.MessageTypeEnum.OK) {
-        const token = response.getToken();
-        const encodedToken = encodeURIComponent(token);
-        const redirectUrl = `https://accept.authorize.net/payment/payment/${encodedToken}`;
+        const token = response.getToken()?.trim(); // ✅ Make sure it's trimmed
+        if (!token) {
+          return res.status(500).json({ error: "Empty token received" });
+        }
+        const redirectUrl = `https://accept.authorize.net/payment/payment/${token}`; // ✅ Do NOT encode
         res.status(200).json({ url: redirectUrl });
       } else {
         const error = response.getMessages().getMessage()[0];
-        res.status(500).json({ error: `${error.getCode()}: ${error.getText()}` });
+        res.status(500).json({
+          error: `${error.getCode()}: ${error.getText()}`,
+        });
       }
     });
   } catch (err) {
@@ -81,7 +91,7 @@ app.post("/create-payment-token", async (req, res) => {
   }
 });
 
-// Health check endpoint
+// Health check
 app.get("/", (req, res) => {
   res.send("Authorize.Net Accept Hosted backend is running.");
 });
