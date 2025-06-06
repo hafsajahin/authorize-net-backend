@@ -63,9 +63,9 @@ app.post("/create-payment-token", async (req, res) => {
     returnOptions.setSettingName("hostedPaymentReturnOptions");
     returnOptions.setSettingValue(JSON.stringify({
       showReceipt: false,
-      url: "https://www.luxury-lounger.com/success",   // ✅ LIVE Success URL
+      url: "https://www.luxury-lounger.com/success",
       urlText: "Continue",
-      cancelUrl: "https://www.luxury-lounger.com/cancel", // ✅ LIVE Cancel URL
+      cancelUrl: "https://www.luxury-lounger.com/cancel",
       cancelUrlText: "Cancel"
     }));
 
@@ -88,8 +88,8 @@ app.post("/create-payment-token", async (req, res) => {
 
       if (response.getMessages().getResultCode() === APIContracts.MessageTypeEnum.OK) {
         const token = response.getToken();
-        const redirectUrl = `https://accept.authorize.net/payment/payment/${token}`; // ✅ Do NOT encode token
-        res.status(200).json({ url: redirectUrl });
+        const redirectUrl = `https://accept.authorize.net/payment/payment`;
+        res.status(200).json({ token, redirectUrl });
       } else {
         const error = response.getMessages().getMessage()[0];
         console.error("Authorize.Net Error:", error.getCode(), error.getText());
