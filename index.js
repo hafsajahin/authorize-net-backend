@@ -1,4 +1,4 @@
-const express = require("express");
+ write my code for live cerdential const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const { APIContracts, APIControllers } = require("authorizenet");
@@ -9,59 +9,25 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(bodyParser.json());
 
-// Helper function to wrap Authorize.Net controller execute in a Promise
-function getHostedPaymentToken(request) {
-  return new Promise((resolve, reject) => {
-    const ctrl = new APIControllers.GetHostedPaymentPageController(request.getJSON());
-    ctrl.setEnvironment("https://api2.authorize.net/xml/v1/request.api");
-
-    let callbackCalled = false;
-
-    // Set a timeout to reject if callback doesn't fire in 30 seconds
-    const timeout = setTimeout(() => {
-      if (!callbackCalled) {
-        console.error("Authorize.Net execute callback did not fire within 30 seconds");
-        reject(new Error("Authorize.Net request timeout"));
-      }
-    }, 30000);
-
-    ctrl.execute(() => {
-      callbackCalled = true;
-      clearTimeout(timeout);
-
-      console.log("Authorize.Net execute callback triggered");
-
-      const apiResponse = ctrl.getResponse();
-      const response = new APIContracts.GetHostedPaymentPageResponse(apiResponse);
-
-      if (response.getMessages().getResultCode() === APIContracts.MessageTypeEnum.OK) {
-        const token = response.getToken();
-        resolve(token);
-      } else {
-        const error = response.getMessages().getMessage()[0];
-        console.error("Authorize.Net Error:", error.getCode(), error.getText());
-        reject(new Error(`${error.getCode()}: ${error.getText()}`));
-      }
-    });
-  });
-}
-
 app.post("/create-payment-token", async (req, res) => {
-  const { amount, apiLoginId, transactionKey } = req.body;
+  const { apiLoginId, transactionKey, amount } = req.body;
 
-  if (!amount || !apiLoginId || !transactionKey) {
-    return res.status(400).json({ error: "Missing required fields: amount, apiLoginId, or transactionKey" });
+  if (!apiLoginId || !transactionKey || !amount) {
+    return res.status(400).json({ error: "Missing required fields" });
   }
 
   try {
+    // Merchant authentication
     const merchantAuthentication = new APIContracts.MerchantAuthenticationType();
     merchantAuthentication.setName(apiLoginId);
     merchantAuthentication.setTransactionKey(transactionKey);
 
+    // Transaction details
     const transactionRequest = new APIContracts.TransactionRequestType();
     transactionRequest.setTransactionType(APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
     transactionRequest.setAmount(amount);
 
+    // Hosted payment page settings
     const returnOptions = new APIContracts.SettingType();
     returnOptions.setSettingName("hostedPaymentReturnOptions");
     returnOptions.setSettingValue(JSON.stringify({
@@ -78,26 +44,41 @@ app.post("/create-payment-token", async (req, res) => {
 
     const settings = [returnOptions, buttonOptions];
 
+    // Build the request
     const request = new APIContracts.GetHostedPaymentPageRequest();
     request.setMerchantAuthentication(merchantAuthentication);
     request.setTransactionRequest(transactionRequest);
     request.setHostedPaymentSettings({ setting: settings });
 
-    const token = await getHostedPaymentToken(request);
-    const redirectUrl = `https://accept.authorize.net/payment/payment/${encodeURIComponent(token)}`;
+    const ctrl = new APIControllers.GetHostedPaymentPageController(request.getJSON());
 
-    res.status(200).json({ token, url: redirectUrl });
+    // Execute request
+    ctrl.execute(() => {
+      const apiResponse = ctrl.getResponse();
+      const response = new APIContracts.GetHostedPaymentPageResponse(apiResponse);
+
+      if (response.getMessages().getResultCode() === APIContracts.MessageTypeEnum.OK) {
+        const token = response.getToken();
+        const redirectUrl = https://test.authorize.net/payment/payment/${encodeURIComponent(token)};
+        res.status(200).json({ token, url: redirectUrl });
+      } else {
+        const error = response.getMessages().getMessage()[0];
+        console.error("Authorize.Net Error:", error.getCode(), error.getText());
+        res.status(500).json({ error: ${error.getCode()}: ${error.getText()} });
+      }
+    });
+
   } catch (err) {
-    console.error("Error generating token:", err);
-    res.status(500).json({ error: err.message || "Internal Server Error" });
+    console.error("Token generation failed:", err);
+    res.status(500).json({ error: "Internal server error during token generation" });
   }
 });
 
-// Health check endpoint
+// Health check
 app.get("/", (req, res) => {
-  res.send("Authorize.Net live backend is running.");
+  res.send("Authorize.Net sandbox backend is running.");
 });
 
 app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+  console.log(Server is running on port ${port});
 });
