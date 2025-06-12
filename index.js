@@ -10,17 +10,17 @@ app.use(cors());
 app.use(bodyParser.json());
 
 app.post("/create-payment-token", async (req, res) => {
-  const { apiLoginId, transactionKey, amount } = req.body;
+  const { amount } = req.body;
 
-  if (!apiLoginId || !transactionKey || !amount) {
-    return res.status(400).json({ error: "Missing required fields" });
+  if (!amount) {
+    return res.status(400).json({ error: "Missing required field: amount" });
   }
 
   try {
-    // Merchant authentication
+    // Use live credentials from environment variables
     const merchantAuthentication = new APIContracts.MerchantAuthenticationType();
-    merchantAuthentication.setName(apiLoginId);
-    merchantAuthentication.setTransactionKey(transactionKey);
+    merchantAuthentication.setName(process.env.API_LOGIN_ID);
+    merchantAuthentication.setTransactionKey(process.env.TRANSACTION_KEY);
 
     // Transaction details
     const transactionRequest = new APIContracts.TransactionRequestType();
@@ -50,7 +50,9 @@ app.post("/create-payment-token", async (req, res) => {
     request.setTransactionRequest(transactionRequest);
     request.setHostedPaymentSettings({ setting: settings });
 
+    // Create controller with live environment URL explicitly
     const ctrl = new APIControllers.GetHostedPaymentPageController(request.getJSON());
+    ctrl.setEnvironment("https://api2.authorize.net/xml/v1/request.api");
 
     // Execute request
     ctrl.execute(() => {
@@ -59,6 +61,7 @@ app.post("/create-payment-token", async (req, res) => {
 
       if (response.getMessages().getResultCode() === APIContracts.MessageTypeEnum.OK) {
         const token = response.getToken();
+        // Live payment page URL (not test)
         const redirectUrl = `https://accept.authorize.net/payment/payment/${encodeURIComponent(token)}`;
         res.status(200).json({ token, url: redirectUrl });
       } else {
@@ -76,7 +79,7 @@ app.post("/create-payment-token", async (req, res) => {
 
 // Health check
 app.get("/", (req, res) => {
-  res.send("Authorize.Net sandbox backend is running.");
+  res.send("Authorize.Net live backend is running.");
 });
 
 app.listen(port, () => {
