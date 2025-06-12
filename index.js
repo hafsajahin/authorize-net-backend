@@ -19,8 +19,8 @@ app.post("/create-payment-token", async (req, res) => {
   try {
     // Use live credentials from environment variables
     const merchantAuthentication = new APIContracts.MerchantAuthenticationType();
-    merchantAuthentication.setName(process.env.API_LOGIN_ID);
-    merchantAuthentication.setTransactionKey(process.env.TRANSACTION_KEY);
+    merchantAuthentication.setName(process.env.apiLoginId);
+    merchantAuthentication.setTransactionKey(process.env.transactionKey);
 
     // Transaction details
     const transactionRequest = new APIContracts.TransactionRequestType();
