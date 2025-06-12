@@ -9,25 +9,25 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(bodyParser.json());
 
-app.post("/create-payment-token", async (req, res) => {
-  const { amount } = req.body;
+app.post("/create-payment-token", (req, res) => {
+  const { amount, apiLoginId, transactionKey } = req.body;
 
-  if (!amount) {
-    return res.status(400).json({ error: "Missing required field: amount" });
+  if (!amount || !apiLoginId || !transactionKey) {
+    return res.status(400).json({ error: "Missing required fields: amount, apiLoginId, or transactionKey" });
   }
 
   try {
-    // Use live credentials from environment variables
+    // Setup merchant authentication using passed credentials
     const merchantAuthentication = new APIContracts.MerchantAuthenticationType();
-    merchantAuthentication.setName(process.env.apiLoginId);
-    merchantAuthentication.setTransactionKey(process.env.transactionKey);
+    merchantAuthentication.setName(apiLoginId);
+    merchantAuthentication.setTransactionKey(transactionKey);
 
-    // Transaction details
+    // Set transaction details
     const transactionRequest = new APIContracts.TransactionRequestType();
     transactionRequest.setTransactionType(APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
     transactionRequest.setAmount(amount);
 
-    // Hosted payment page settings
+    // Setup hosted payment page settings
     const returnOptions = new APIContracts.SettingType();
     returnOptions.setSettingName("hostedPaymentReturnOptions");
     returnOptions.setSettingValue(JSON.stringify({
@@ -44,24 +44,23 @@ app.post("/create-payment-token", async (req, res) => {
 
     const settings = [returnOptions, buttonOptions];
 
-    // Build the request
+    // Build the request object
     const request = new APIContracts.GetHostedPaymentPageRequest();
     request.setMerchantAuthentication(merchantAuthentication);
     request.setTransactionRequest(transactionRequest);
     request.setHostedPaymentSettings({ setting: settings });
 
-    // Create controller and set environment to PRODUCTION properly
+    // Create controller and set live environment URL
     const ctrl = new APIControllers.GetHostedPaymentPageController(request.getJSON());
-    ctrl.setEnvironment(APIControllers.Constants.endpoint.production);
+    ctrl.setEnvironment("https://api2.authorize.net/xml/v1/request.api");
 
-    // Execute request
+    // Execute the request
     ctrl.execute(() => {
       const apiResponse = ctrl.getResponse();
       const response = new APIContracts.GetHostedPaymentPageResponse(apiResponse);
 
       if (response.getMessages().getResultCode() === APIContracts.MessageTypeEnum.OK) {
         const token = response.getToken();
-        // Live payment page URL (not test)
         const redirectUrl = `https://accept.authorize.net/payment/payment/${encodeURIComponent(token)}`;
         res.status(200).json({ token, url: redirectUrl });
       } else {
@@ -77,7 +76,7 @@ app.post("/create-payment-token", async (req, res) => {
   }
 });
 
-// Health check
+// Health check endpoint
 app.get("/", (req, res) => {
   res.send("Authorize.Net live backend is running.");
 });
