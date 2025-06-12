@@ -4,12 +4,49 @@ const cors = require("cors");
 const { APIContracts, APIControllers } = require("authorizenet");
 
 const app = express();
-const port = process.env.PORT || 3000; // ✅ Uses dynamic port for Render
+const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(bodyParser.json());
 
-app.post("/create-payment-token", (req, res) => {
+// Helper function to wrap Authorize.Net controller execute in a Promise
+function getHostedPaymentToken(request) {
+  return new Promise((resolve, reject) => {
+    const ctrl = new APIControllers.GetHostedPaymentPageController(request.getJSON());
+    ctrl.setEnvironment("https://api2.authorize.net/xml/v1/request.api");
+
+    let callbackCalled = false;
+
+    // Set a timeout to reject if callback doesn't fire in 30 seconds
+    const timeout = setTimeout(() => {
+      if (!callbackCalled) {
+        console.error("Authorize.Net execute callback did not fire within 30 seconds");
+        reject(new Error("Authorize.Net request timeout"));
+      }
+    }, 30000);
+
+    ctrl.execute(() => {
+      callbackCalled = true;
+      clearTimeout(timeout);
+
+      console.log("Authorize.Net execute callback triggered");
+
+      const apiResponse = ctrl.getResponse();
+      const response = new APIContracts.GetHostedPaymentPageResponse(apiResponse);
+
+      if (response.getMessages().getResultCode() === APIContracts.MessageTypeEnum.OK) {
+        const token = response.getToken();
+        resolve(token);
+      } else {
+        const error = response.getMessages().getMessage()[0];
+        console.error("Authorize.Net Error:", error.getCode(), error.getText());
+        reject(new Error(`${error.getCode()}: ${error.getText()}`));
+      }
+    });
+  });
+}
+
+app.post("/create-payment-token", async (req, res) => {
   const { amount, apiLoginId, transactionKey } = req.body;
 
   if (!amount || !apiLoginId || !transactionKey) {
@@ -17,17 +54,14 @@ app.post("/create-payment-token", (req, res) => {
   }
 
   try {
-    // Setup merchant authentication using passed credentials
     const merchantAuthentication = new APIContracts.MerchantAuthenticationType();
     merchantAuthentication.setName(apiLoginId);
     merchantAuthentication.setTransactionKey(transactionKey);
 
-    // Set transaction details
     const transactionRequest = new APIContracts.TransactionRequestType();
     transactionRequest.setTransactionType(APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
     transactionRequest.setAmount(amount);
 
-    // Setup hosted payment page settings
     const returnOptions = new APIContracts.SettingType();
     returnOptions.setSettingName("hostedPaymentReturnOptions");
     returnOptions.setSettingValue(JSON.stringify({
@@ -44,35 +78,18 @@ app.post("/create-payment-token", (req, res) => {
 
     const settings = [returnOptions, buttonOptions];
 
-    // Build the request object
     const request = new APIContracts.GetHostedPaymentPageRequest();
     request.setMerchantAuthentication(merchantAuthentication);
     request.setTransactionRequest(transactionRequest);
     request.setHostedPaymentSettings({ setting: settings });
 
-    // Create controller and set live environment URL
-    const ctrl = new APIControllers.GetHostedPaymentPageController(request.getJSON());
-    ctrl.setEnvironment("https://api2.authorize.net/xml/v1/request.api");
+    const token = await getHostedPaymentToken(request);
+    const redirectUrl = `https://accept.authorize.net/payment/payment/${encodeURIComponent(token)}`;
 
-    // Execute the request
-    ctrl.execute(() => {
-      const apiResponse = ctrl.getResponse();
-      const response = new APIContracts.GetHostedPaymentPageResponse(apiResponse);
-
-      if (response.getMessages().getResultCode() === APIContracts.MessageTypeEnum.OK) {
-        const token = response.getToken();
-        const redirectUrl = `https://accept.authorize.net/payment/payment/${encodeURIComponent(token)}`;
-        res.status(200).json({ token, url: redirectUrl });
-      } else {
-        const error = response.getMessages().getMessage()[0];
-        console.error("Authorize.Net Error:", error.getCode(), error.getText());
-        res.status(500).json({ error: `${error.getCode()}: ${error.getText()}` });
-      }
-    });
-
+    res.status(200).json({ token, url: redirectUrl });
   } catch (err) {
-    console.error("Token generation failed:", err);
-    res.status(500).json({ error: "Internal server error during token generation" });
+    console.error("Error generating token:", err);
+    res.status(500).json({ error: err.message || "Internal Server Error" });
   }
 });
 
@@ -81,7 +98,6 @@ app.get("/", (req, res) => {
   res.send("Authorize.Net live backend is running.");
 });
 
-// ✅ Correct port binding for Render
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
