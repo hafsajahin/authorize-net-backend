@@ -50,9 +50,9 @@ app.post("/create-payment-token", async (req, res) => {
     request.setTransactionRequest(transactionRequest);
     request.setHostedPaymentSettings({ setting: settings });
 
-    // Create controller with live environment URL explicitly
+    // Create controller and set environment to PRODUCTION properly
     const ctrl = new APIControllers.GetHostedPaymentPageController(request.getJSON());
-    ctrl.setEnvironment("https://api2.authorize.net/xml/v1/request.api");
+    ctrl.setEnvironment(APIControllers.Constants.endpoint.production);
 
     // Execute request
     ctrl.execute(() => {
