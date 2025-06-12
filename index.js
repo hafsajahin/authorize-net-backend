@@ -4,7 +4,7 @@ const cors = require("cors");
 const { APIContracts, APIControllers } = require("authorizenet");
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3000; // ✅ Uses dynamic port for Render
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -81,6 +81,7 @@ app.get("/", (req, res) => {
   res.send("Authorize.Net live backend is running.");
 });
 
+// ✅ Correct port binding for Render
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
