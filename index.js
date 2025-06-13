@@ -9,64 +9,49 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(bodyParser.json());
 
-app.post("/create-payment-token", async (req, res) => {
+app.post('/create-payment-token', async (req, res) => {
   const { apiLoginId, transactionKey, amount } = req.body;
 
-  if (!apiLoginId || !transactionKey || !amount) {
-    return res.status(400).json({ error: "Missing required fields" });
-  }
+  const merchantAuthenticationType = new ApiContracts.MerchantAuthenticationType();
+  merchantAuthenticationType.setName(apiLoginId);
+  merchantAuthenticationType.setTransactionKey(transactionKey);
 
-  try {
-    // Merchant authentication
-    const merchantAuthentication = new APIContracts.MerchantAuthenticationType();
-    merchantAuthentication.setName(apiLoginId);
-    merchantAuthentication.setTransactionKey(transactionKey);
+  const transactionRequestType = new ApiContracts.TransactionRequestType();
+  transactionRequestType.setTransactionType(ApiContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
+  transactionRequestType.setAmount(amount);
 
-    // Transaction details
-    const transactionRequest = new APIContracts.TransactionRequestType();
-    transactionRequest.setTransactionType(APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
-    transactionRequest.setAmount(amount);
+  const setting1 = new ApiContracts.SettingType();
+  setting1.setSettingName('hostedPaymentReturnOptions');
+  setting1.setSettingValue(JSON.stringify({
+    showReceipt: false,
+    url: 'https://your-website.com/success', // optional
+    urlText: 'Continue',
+    cancelUrl: 'https://your-website.com/cancel',
+    cancelUrlText: 'Cancel'
+  }));
 
-    // Hosted payment page settings
-    const returnOptions = new APIContracts.SettingType();
-    returnOptions.setSettingName("hostedPaymentReturnOptions");
-    returnOptions.setSettingValue(JSON.stringify({
-      showReceipt: false,
-      url: "https://www.luxury-lounger.com/success",
-      urlText: "Continue",
-      cancelUrl: "https://www.luxury-lounger.com/cancel",
-      cancelUrlText: "Cancel"
-    }));
+  const request = new ApiContracts.GetHostedPaymentPageRequest();
+  request.setMerchantAuthentication(merchantAuthenticationType);
+  request.setTransactionRequest(transactionRequestType);
+  request.addToHostedPaymentSettings(setting1);
 
-    const buttonOptions = new APIContracts.SettingType();
-    buttonOptions.setSettingName("hostedPaymentButtonOptions");
-    buttonOptions.setSettingValue(JSON.stringify({ text: "Pay Now" }));
+  const ctrl = new ApiControllers.GetHostedPaymentPageController(request.getJSON());
 
-    const settings = [returnOptions, buttonOptions];
+  ctrl.execute(() => {
+    const apiResponse = ctrl.getResponse();
+    const response = new ApiContracts.GetHostedPaymentPageResponse(apiResponse);
 
-    // Build the request
-    const request = new APIContracts.GetHostedPaymentPageRequest();
-    request.setMerchantAuthentication(merchantAuthentication);
-    request.setTransactionRequest(transactionRequest);
-    request.setHostedPaymentSettings({ setting: settings });
+    if (response != null && response.getMessages().getResultCode() === ApiContracts.MessageTypeEnum.OK) {
+      const token = response.getToken();
+      const url = `https://accept.authorize.net/payment/payment?token=${token}`;
+      res.json({ token, url });
+    } else {
+      const errorMessages = response.getMessages().getMessage();
+      res.status(500).json({ error: errorMessages[0].getText() });
+    }
+  });
+});
 
-    const ctrl = new APIControllers.GetHostedPaymentPageController(request.getJSON());
-
-    // Execute request
-    ctrl.execute(() => {
-      const apiResponse = ctrl.getResponse();
-      const response = new APIContracts.GetHostedPaymentPageResponse(apiResponse);
-
-      if (response.getMessages().getResultCode() === APIContracts.MessageTypeEnum.OK) {
-        const token = response.getToken();
-        const redirectUrl = https://test.authorize.net/payment/payment/${encodeURIComponent(token)};
-        res.status(200).json({ token, url: redirectUrl });
-      } else {
-        const error = response.getMessages().getMessage()[0];
-        console.error("Authorize.Net Error:", error.getCode(), error.getText());
-        res.status(500).json({ error: ${error.getCode()}: ${error.getText()} });
-      }
-    });
 
   } catch (err) {
     console.error("Token generation failed:", err);
