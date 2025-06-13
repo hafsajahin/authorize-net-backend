@@ -26,9 +26,9 @@ app.post('/create-payment-token', (req, res) => {
     setting1.setSettingName('hostedPaymentReturnOptions');
     setting1.setSettingValue(JSON.stringify({
       showReceipt: false,
-      url: 'https://your-website.com/success',
+      url: 'https://www.luxury-lounger.com/success',
       urlText: 'Continue',
-      cancelUrl: 'https://your-website.com/cancel',
+      cancelUrl: 'https://www.luxury-lounger.com/cancel',
       cancelUrlText: 'Cancel'
     }));
 
