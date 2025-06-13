@@ -25,16 +25,16 @@ app.post('/create-payment-token', async (req, res) => {
     setting1.setSettingName('hostedPaymentReturnOptions');
     setting1.setSettingValue(JSON.stringify({
       showReceipt: false,
-      url: 'https://your-website.com/success', // optional
+      url: 'https://your-website.com/success',  // change to your actual success URL
       urlText: 'Continue',
-      cancelUrl: 'https://your-website.com/cancel',
+      cancelUrl: 'https://your-website.com/cancel', // change to your actual cancel URL
       cancelUrlText: 'Cancel'
     }));
 
     const request = new APIContracts.GetHostedPaymentPageRequest();
     request.setMerchantAuthentication(merchantAuthenticationType);
     request.setTransactionRequest(transactionRequestType);
-    request.addToHostedPaymentSettings(setting1);
+    request.setHostedPaymentSettings([setting1]); // Corrected here
 
     const ctrl = new APIControllers.GetHostedPaymentPageController(request.getJSON());
 
@@ -57,7 +57,7 @@ app.post('/create-payment-token', async (req, res) => {
   }
 });
 
-// Health check
+// Health check endpoint
 app.get("/", (req, res) => {
   res.send("Authorize.Net sandbox backend is running.");
 });
