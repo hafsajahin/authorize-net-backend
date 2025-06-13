@@ -9,33 +9,38 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(bodyParser.json());
 
-app.post('/create-payment-token', async (req, res) => {
+app.post('/create-payment-token', (req, res) => {
   try {
     const { apiLoginId, transactionKey, amount } = req.body;
 
+    // Merchant Authentication
     const merchantAuthenticationType = new APIContracts.MerchantAuthenticationType();
     merchantAuthenticationType.setName(apiLoginId);
     merchantAuthenticationType.setTransactionKey(transactionKey);
 
+    // Transaction Request
     const transactionRequestType = new APIContracts.TransactionRequestType();
     transactionRequestType.setTransactionType(APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
     transactionRequestType.setAmount(amount);
 
+    // Hosted Payment Return Options Setting
     const setting1 = new APIContracts.SettingType();
     setting1.setSettingName('hostedPaymentReturnOptions');
     setting1.setSettingValue(JSON.stringify({
       showReceipt: false,
-      url: 'https://your-website.com/success',  // change to your actual success URL
+      url: 'https://your-website.com/success',
       urlText: 'Continue',
-      cancelUrl: 'https://your-website.com/cancel', // change to your actual cancel URL
+      cancelUrl: 'https://your-website.com/cancel',
       cancelUrlText: 'Cancel'
     }));
 
+    // Prepare the request
     const request = new APIContracts.GetHostedPaymentPageRequest();
     request.setMerchantAuthentication(merchantAuthenticationType);
     request.setTransactionRequest(transactionRequestType);
-    request.setHostedPaymentSettings([setting1]); // Corrected here
+    request.addToHostedPaymentSettings(setting1);
 
+    // Controller to send request to Authorize.Net
     const ctrl = new APIControllers.GetHostedPaymentPageController(request.getJSON());
 
     ctrl.execute(() => {
@@ -59,7 +64,7 @@ app.post('/create-payment-token', async (req, res) => {
 
 // Health check endpoint
 app.get("/", (req, res) => {
-  res.send("Authorize.Net sandbox backend is running.");
+  res.send("Authorize.Net backend is running.");
 });
 
 app.listen(port, () => {
