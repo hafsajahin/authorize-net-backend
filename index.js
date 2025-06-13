@@ -13,12 +13,10 @@ app.post('/create-payment-token', (req, res) => {
   try {
     const { apiLoginId, transactionKey, amount } = req.body;
 
-    // Merchant Authentication
     const merchantAuthenticationType = new APIContracts.MerchantAuthenticationType();
     merchantAuthenticationType.setName(apiLoginId);
     merchantAuthenticationType.setTransactionKey(transactionKey);
 
-    // Transaction Request
     const transactionRequestType = new APIContracts.TransactionRequestType();
     transactionRequestType.setTransactionType(APIContracts.TransactionTypeEnum.AUTHCAPTURETRANSACTION);
     transactionRequestType.setAmount(amount);
@@ -34,13 +32,13 @@ app.post('/create-payment-token', (req, res) => {
       cancelUrlText: 'Cancel'
     }));
 
-    // Prepare the request
     const request = new APIContracts.GetHostedPaymentPageRequest();
     request.setMerchantAuthentication(merchantAuthenticationType);
     request.setTransactionRequest(transactionRequestType);
-    request.addToHostedPaymentSettings(setting1);
 
-    // Controller to send request to Authorize.Net
+    // This is the fix: setHostedPaymentSettings accepts an array
+    request.setHostedPaymentSettings([setting1]);
+
     const ctrl = new APIControllers.GetHostedPaymentPageController(request.getJSON());
 
     ctrl.execute(() => {
@@ -62,7 +60,6 @@ app.post('/create-payment-token', (req, res) => {
   }
 });
 
-// Health check endpoint
 app.get("/", (req, res) => {
   res.send("Authorize.Net backend is running.");
 });
