@@ -1,4 +1,4 @@
- write my code for live cerdential const express = require("express");
+const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const { APIContracts, APIControllers } = require("authorizenet");
